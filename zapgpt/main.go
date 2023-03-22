@@ -1,12 +1,14 @@
-package zapgpt
+package main
 
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/spf13/viper"
 )
 
 type Message struct {
@@ -27,12 +29,21 @@ type Response struct {
 	Choices []Choice `json:"choices"`
 }
 
+type HttpReposnse struct {
+	Status     string
+	StatusCode int
+}
+
 type Choice struct {
 	Index   int     `json:"index"`
 	Message Message `json:"message"`
 }
 
 func GenerateGPTTtext(query string) (string, error) {
+	if query == "" {
+		panic("Body vazio!")
+	}
+
 	req := Request{
 		Model: "gpt-3.5-turbo",
 		Messages: []Message{
@@ -52,10 +63,29 @@ func GenerateGPTTtext(query string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	viper.SetConfigName("config")
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath(".")
+
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			panic("Config file not found!")
+		} else {
+			panic(err)
+		}
+	}
+
+	key := viper.GetString("openaikey")
+	token := "Bearer" + " " + key
+
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "Bearer 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")
+	request.Header.Set("Authorization", token)
 
 	response, err := http.DefaultClient.Do(request)
+	if response.StatusCode != 200 {
+		panic(response.Status)
+	}
 	if err != nil {
 		return "", nil
 	}
@@ -90,6 +120,7 @@ func sendMessage(c *gin.Context) {
 func main() {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
+	fmt.Println("Service started on localhost:8080")
 	router.POST("/chat", sendMessage)
 	router.Run(":8080")
 }
